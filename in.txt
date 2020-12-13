@@ -1,0 +1,15 @@
+public class helloworld {
+	public static int Add(int a, int b){
+	    int ret ;
+	    ret = a+b;
+		if(a > b) then {
+		    while(a > b) do {
+                a = a+b;
+            }
+		}
+	   return ret;
+	}
+	public static void main(String[] args) {
+		System.out.println("result="+Add(1,2));
+	}
+}
