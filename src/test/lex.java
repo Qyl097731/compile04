@@ -19,13 +19,15 @@ public class lex {
 
     private String className = "";
 
+    private String argeName = "";
+
     private String newIdent = "";
+
+    private StringBuffer resultStr = new StringBuffer();
 
     private StringBuffer tempStr = new StringBuffer();
 
     private Stack<StringBuffer> identStack = new Stack<>();
-
-    private List<StringBuffer> resultList = new ArrayList<>();
 
     private List<String> identList = new ArrayList<>(), usedIdent = new ArrayList<>();
 
@@ -34,6 +36,10 @@ public class lex {
     private Boolean flag = false;
 
     private Integer cnt = 0;
+
+    private File file = new File("out.txt");
+    private BufferedWriter bw = null;
+
 
     //符号类型定义
     public enum symbol {
@@ -128,46 +134,28 @@ public class lex {
         System.out.println(lex.line);
         lex.iCurPos = 0;
         lex.Err = 0;
-        File file = new File("out.txt");
-        if(!file.exists()){
-            file.createNewFile();
+        if (!lex.file.exists()) {
+            lex.file.createNewFile();
         }
-        BufferedWriter bw = new BufferedWriter(new FileWriter(file,false));
-        bw.write("输出文件:\n");
-        bw = new BufferedWriter(new FileWriter(file,true));
-
+        lex.bw = new BufferedWriter(new FileWriter(lex.file));
         //==========词法&语法分析：一趟完成==========
+        lex.resultStr.append("输出文件:\n");
         lex.getSym();
         lex.block();
         if (lex.Err == 0) {
             //输出符号表
-//            for (int i = 0; i < lex.Symlist.size(); i++) {
-//                System.out.print(lex.Symlist.get(i).toString().trim() + " ");
-//            }
-            bw.write("\nsyntax parses success!\n\n");
-//            System.out.println("\nsyntax parses success!\n\n");
+            System.out.println(lex.resultStr);
+            for (int i = 0; i < lex.Symlist.size(); i++) {
+                System.out.print(lex.Symlist.get(i).toString().trim() + " ");
+            }
+            System.out.println("\nsyntax parses success!\n\n");
+            lex.bw.write(new String(lex.resultStr));
         } else {
-            bw.write("syntax parses fail!\n\n");
-//            System.out.println("syntax parses fail!\n\n");
+            System.out.println("syntax parses fail!\n\n");
         }
+        lex.bw.close();
     }
 
-    //从终端读入一行程序
-//    public String getProgram() {
-//            BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
-//            line = "";
-//            try {
-//                do {
-//                    System.out.print("请读入程序串，以. 结束 ：");
-//                    line = in.readLine().trim();
-//                } while (line.endsWith(".") == false);
-//                in.close();
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
-//
-//            return line;
-//    }
 
     //识别是否为一个关键字： 返回对应类型。用二分法查找法
     public symbol getKeyWordType() {
@@ -207,7 +195,7 @@ public class lex {
     }
 
     //词法分析主 函数：识别一个符号
-    public void getSym() {
+    public void getSym() throws IOException {
         flag = false;
         tempStr = new StringBuffer();
         int iIndex = 0;
@@ -338,7 +326,6 @@ public class lex {
                         } else {
 //                          是注释 加个空格进去
                             flag = true;
-                            resultList.add(new StringBuffer(" "));
                             iCurPos += 2;
                         }
                     }
@@ -411,18 +398,33 @@ public class lex {
         } else if (flag) {
             getSym();
         } else {
+            if (sym == symbol.returnsym) {
+                resultStr.append("\n\t\tSystem.out.println(\"Exit Function " + className + "::" + methodInfo.methodName + "(\"");
+                for (int i = 0; i < methodInfo.params.size(); i++) {
+                    resultStr.append(methodInfo.params.get(i) + "=\"+" + methodInfo.params.get(i) +
+                            (i + 1 == methodInfo.params.size() ? "\"" : "+\","));
+                }
+                resultStr.append("+\")!\");");
+            }
             //把单词加到符号表中去
             AddaWordtoList(sym);
+            if (sym != symbol.rbraces) {
+                resultStr.append(tempStr);
+            }
+
         }
     }
 
     //====语法分析入口：程序块====
     //TIPS：往前看一个sym
-    void block() {
+    void block() throws IOException {
         ClassDefinition();
+        if (Err > 0) {
+            return;
+        }
     }
 
-    void ClassDefinition() {
+    void ClassDefinition() throws IOException {
 
         if (sym == symbol.publicsym || sym == symbol.privatesym) {
             getSym();
@@ -430,17 +432,30 @@ public class lex {
         if (sym == symbol.classsym) {
             getSym();
             Identifier();
+            if (Err > 0) {
+                return;
+            }
             if (sym == symbol.lbraces) {
+                resultStr.append(new String(token).trim());
                 getSym();
                 while (iCurPos < line.length()) {
                     statement();
+                    if (Err > 0) {
+                        return;
+                    }
+                }
+                if (sym != symbol.rbraces) {
+                    Err++;
+                    System.out.println("class缺少}");
+                } else {
+                    resultStr.append((tempStr));
                 }
             }
 
         }
     }
 
-    void MainClass() {
+    void MainClass() throws IOException {
         String strToken = (new String(token)).trim();
         for (int i = 0; i < psvm.length; i++) {
             if (strToken.equals(psvm[i])) {
@@ -453,43 +468,70 @@ public class lex {
             }
         }
         Identifier();
+        if (Err > 0) {
+            return;
+        }
         if (sym == symbol.rparen) {
             getSym();
             if (sym == symbol.lbraces) {
+                resultStr.append("\n\t\tSystem.out.println(\"Enter Function " + className + "::main(" + argeName + "=\"+" + argeName + ".toString()+\")!\");");
                 getSym();
                 while (iCurPos < line.length()) {
                     statement();
                     if (Err > 0) {
                         return;
                     }
+                    if (sym == symbol.rbraces) {
+                        resultStr.append("\n\t\tSystem.out.println(\"Exit Function " + className + "::main(" + argeName + "=\"+" + argeName + ".toString()+\")!\");");
+                        resultStr.append(tempStr);
+                        break;
+                    }
                 }
                 if (Err == 0) {
                     if (sym != symbol.rbraces) {
                         System.out.println("MainClass 缺少 }");
                         Err++;
+                    } else {
+                        getSym();
                     }
                 }
             }
         }
     }
 
-    void MethodDeclaration(String className) {
+    void MethodDeclaration(String className) throws IOException {
         if (sym == symbol.lparen) {
             getSym();
             paramDefinition();
-
             methodList.add(methodInfo);
+            if (Err > 0) {
+                return;
+            }
             if (sym == symbol.rparen) {
                 getSym();
+                if (Err > 0) {
+                    return;
+                }
+                resultStr.append("\n\t\tSystem.out.println(\"Enter Function " + className + "::" + methodInfo.methodName + "(\"");
+                for (int i = 0; i < methodInfo.params.size(); i++) {
+                    resultStr.append(methodInfo.params.get(i) + "=\"+" + methodInfo.params.get(i) +
+                            (i + 1 == methodInfo.params.size() ? "\"" : "+\","));
+                }
+                resultStr.append("+\")!\");");
                 if (sym == symbol.lbraces) {
                     getSym();
                     if (sym == symbol.rbraces) {
+                        resultStr.append(tempStr);
                         getSym();
                         return;
                     }
                     while (iCurPos < line.length()) {
                         statement();
+                        if (Err > 0) {
+                            return;
+                        }
                         if (sym == symbol.rbraces) {
+                            resultStr.append(tempStr);
                             getSym();
                             return;
                         }
@@ -508,39 +550,36 @@ public class lex {
     }
 
     //语句
-    void statement() {
+    void statement() throws IOException {
         /********************************************
          *************** TODO: 语句处理 *************
          *******************************************/
         if (sym == symbol.ident) {
             newIdent = new String(token).trim();
-            if (!identList.contains(newIdent)) {
+            if (!identList.contains(newIdent) && !methodInfo.params.contains(newIdent)) {
                 Err++;
                 //不存在变量
-                error(43);
+                System.out.println("变量不存在");
                 return;
             }
             if (!usedIdent.contains(newIdent))
                 usedIdent.add(newIdent);
             getSym();
-            resultList.add(tempStr);
             assignStatement();
         } else if (sym == symbol.ifsym) {
             getSym();
-            resultList.add(tempStr);
             ifStatement();
         } else if (sym == symbol.whilesym) {
             getSym();
-            resultList.add(tempStr);
             loopStatement();
         } else if (sym == symbol.intsym || sym == symbol.booleansym) {
             getSym();
-            resultList.add(tempStr);
             varDefinition();
         } else if (sym == symbol.sysosym) {
             getSym();
             printStatement();
         } else if (sym == symbol.rbraces) {
+            resultStr.append(tempStr);
             if (iCurPos < line.length()) {
                 getSym();
             }
@@ -555,12 +594,13 @@ public class lex {
                     if (sym == symbol.ident) {
                         methodInfo.methodName = new String(token).trim();
                         getSym();
-                        MethodDeclaration();
+                        MethodDeclaration(className);
                     } else {
                         Err++;
                         System.out.println("方法名出错");
                     }
                 } else if (sym == symbol.voidsym) {
+                    methodInfo.returnType = new String(token).trim();
                     getSym();
                     if (sym == symbol.mainsym) {
                         if (cnt == 0) {
@@ -572,8 +612,9 @@ public class lex {
                             System.out.println("出现两次main");
                         }
                     } else if (sym == symbol.ident) {
+                        methodInfo.methodName = new String(token).trim();
                         getSym();
-                        MethodDeclaration();
+                        MethodDeclaration(className);
                     } else {
                         Err++;
                         System.out.println("没有该类语句");
@@ -586,26 +627,33 @@ public class lex {
             } else {
                 Err++;
                 System.out.println("缺少public");
-                return;
             }
         } else if (sym == symbol.returnsym) {
-            getSym();
-            returnStatement();
+            if (methodInfo.returnType.equals("void")) {
+                Err++;
+                System.out.println("返回类型不匹配");
+            } else {
+                getSym();
+                returnStatement();
+            }
         } else {
             if (!flag)
                 //语法错误
-                error(12);
+                System.out.println("语法错误");
         }
     }
 
-    void returnStatement() {
+    void returnStatement() throws IOException {
         expression();
     }
 
-    void printStatement() {
+    void printStatement() throws IOException {
         if (sym == symbol.lparen) {
             getSym();
             expression();
+            if (Err > 0) {
+                return;
+            }
             if (sym == symbol.rparen) {
                 getSym();
                 if (sym == symbol.semicolon) {
@@ -625,14 +673,13 @@ public class lex {
     }
 
     //赋值语句
-    void assignStatement() {
+    void assignStatement() throws IOException {
         /********************************************
          *************** TODO: 赋值语句处理 *************
          *******************************************/
         //如果当前是 ：= 直接进入表单
         if (sym == symbol.eql) {
             getSym();
-            resultList.add(tempStr);
             expression();
         } else {
             error(31);
@@ -641,46 +688,87 @@ public class lex {
 
 
     //条件语句
-    void ifStatement() {
+    void ifStatement() throws IOException {
         /********************************************
          *************** TODO: 条件语句处理 *************
          *******************************************/
-        condition();
-        if (Err > 0) {
-            return;
-        }
-        if (sym == symbol.thensym) {
+        if (sym == symbol.lparen) {
             getSym();
-            resultList.add(tempStr);
-            statement();
+            condition();
+            if (Err > 0) {
+                return;
+            }
+            if (sym == symbol.rparen) {
+                getSym();
+                if (sym == symbol.thensym) {
+                    getSym();
+                    if (sym == symbol.lbraces) {
+                        getSym();
+                        statement();
+                        if (Err > 0) {
+                            return;
+                        }
+                    } else {
+                        Err++;
+                        System.out.println("then缺少{");
+                    }
+                } else {
+                    // 缺少 then 错误
+                    Err++;
+                    error(33);
+                }
+            } else {
+                Err++;
+                System.out.println("条件语句缺少）");
+            }
         } else {
-            // 缺少 then 错误
-            error(33);
+            Err++;
+            System.out.println("条件语句缺少(");
         }
+
     }
 
 
     //循环语句
-    void loopStatement() {
+    void loopStatement() throws IOException {
         /********************************************
          *************** TODO: 循环语句处理 *************
          *******************************************/
-        condition();
-        if (Err > 0) {
-            return;
-        }
-        if (sym == symbol.dosym) {
+        if (sym == symbol.lparen) {
             getSym();
-            resultList.add(tempStr);
-            statement();
-        } else {
-            //缺少 do
-            error(32);
+
+            condition();
+            if (Err > 0) {
+                return;
+            }
+            if (sym == symbol.rparen) {
+                getSym();
+                if (sym == symbol.dosym) {
+                    getSym();
+                    if (sym == symbol.lbraces) {
+                        getSym();
+                        statement();
+                    } else {
+                        Err++;
+                        System.out.println("while do缺少{");
+                    }
+                } else {
+                    //缺少 do
+                    Err++;
+                    error(32);
+                }
+            } else {
+                Err++;
+                System.out.println("while 条件语句缺少）");
+            }
+        }else{
+            Err++;
+            System.out.println("while 条件语句缺少（");
         }
     }
 
 
-    void paramDefinition() {
+    void paramDefinition() throws IOException {
         methodInfo.paramsNum = 0;
         methodInfo.params.clear();
         if (sym == symbol.intsym || sym == symbol.booleansym) {
@@ -715,7 +803,7 @@ public class lex {
     //变量定义
 
 
-    void varDefinition() {
+    void varDefinition() throws IOException {
         /*
          * @Description: 如果是逗号 向前看一个 A、是标识符    1、存在就报错 2、不存在就存入
          *                                   B、不是标识符  报错
@@ -730,7 +818,6 @@ public class lex {
         while (true) {
             if (sym == symbol.commasym) {
                 getSym();
-                resultList.add(tempStr);
                 if (sym == symbol.semicolon) {
                     getSym();
                     return;
@@ -751,7 +838,6 @@ public class lex {
                     identList.add(newIdent);
                 }
                 getSym();
-                resultList.add(tempStr);
                 if (sym == symbol.semicolon) {
                     getSym();
                     return;
@@ -767,7 +853,7 @@ public class lex {
 
 
     //表达式
-    void expression() {
+    void expression() throws IOException {
         /********************************************
          *************** TODO: 表达式处理 *************
          *******************************************/
@@ -775,23 +861,20 @@ public class lex {
             while (sym == symbol.plus || sym == symbol.minus) {
                 //直接下一个
                 getSym();
-                resultList.add(tempStr);
                 //直接下一项 term不满足的那个符号是不是+ -继续while
                 term();
             }
-            if(sym == symbol.semicolon){
+            if (sym == symbol.semicolon) {
                 getSym();
-            }else{
+            } else {
                 Err++;
                 System.out.println("表达式缺少分号");
-                return;
             }
-        } else if(sym == symbol.truesym){
+        } else if (sym == symbol.truesym) {
             getSym();
-            return;
-        }else if(sym == symbol.falsesym){
+        } else if (sym == symbol.falsesym) {
             getSym();
-        }else if (sym == symbol.quotation) {
+        } else if (sym == symbol.quotation) {
             getSym();
             while (sym != symbol.quotation) {
                 getSym();
@@ -810,6 +893,9 @@ public class lex {
                             if (methodList.get(i).methodName.equals(strToken)) {
                                 getSym();
                                 transmitParams(methodList.get(i).paramsNum);
+                                if (Err > 0) {
+                                    return;
+                                }
                                 return;
                             }
                         }
@@ -827,23 +913,32 @@ public class lex {
             while (sym == symbol.plus || sym == symbol.minus) {
                 //直接下一个
                 getSym();
-                resultList.add(tempStr);
                 //直接下一项 term不满足的那个符号是不是+ -继续while
                 term();
+                if (Err > 0) {
+                    return;
+                }
             }
-            if(sym == symbol.semicolon){
+            if (sym == symbol.semicolon) {
                 getSym();
-            }else{
+            } else if (sym == symbol.neq || sym == symbol.eql || sym == symbol.lss || sym == symbol.leq || sym == symbol.gtr || sym == symbol.geq) {
+                getSym();
+                expression();
+            } else if (sym == symbol.rparen) {
+            } else {
                 Err++;
                 System.out.println("表达式缺少分号");
             }
         }
     }
 
-    private void transmitParams(Integer paramsNum) {
+    private void transmitParams(Integer paramsNum) throws IOException {
         if (sym == symbol.lparen) {
             getSym();
             factor();
+            if (Err > 0) {
+                return;
+            }
             for (int j = 1; j < paramsNum; j++) {
                 if (sym == symbol.commasym) {
                     getSym();
@@ -853,7 +948,13 @@ public class lex {
                     System.out.println("参数传递缺少，");
                     return;
                 }
+                if (Err > 0) {
+                    return;
+                }
             }
+        }
+        if (Err > 0) {
+            return;
         }
         if (sym == symbol.rparen) {
             getSym();
@@ -865,7 +966,7 @@ public class lex {
 
 
     //项
-    void term() {
+    void term() throws IOException {
         /********************************************
          *************** TODO: 项处理 *************
          *******************************************/
@@ -876,13 +977,15 @@ public class lex {
         }
         while (sym == symbol.times || sym == symbol.slash) {
             getSym();
-            resultList.add(tempStr);
             factor();
+            if (Err > 0) {
+                return;
+            }
         }
     }
 
     //因子
-    void factor() {
+    void factor() throws IOException {
         /********************************************
          *************** TODO: 因子处理 *************
          *******************************************/
@@ -900,13 +1003,11 @@ public class lex {
                     usedIdent.add(newIdent);
             }
             getSym();
-            resultList.add(tempStr);
             return;
         }
         // 如果是（
         if (sym == symbol.lparen) {
             getSym();
-            resultList.add(tempStr);
             expression();
             // 用expression 不满足的符号 看是不是右括号
             if (Err > 0) {
@@ -917,40 +1018,34 @@ public class lex {
                 error(61);
             } else {
                 getSym();
-                resultList.add(tempStr);
             }
-
         } else {
             //其他
             error(60);
         }
     }
 
-    void Identifier() {
+    void Identifier() throws IOException {
         if (sym == symbol.ident) {
-            className = new String(token).trim();
+            argeName = new String(token).trim();
+            if (className.equals("")) {
+                className = new String(token).trim();
+            }
             getSym();
         } else {
             Err++;
+            System.out.println("变量声明出错");
         }
     }
 
     //条件
-    void condition() {
+    void condition() throws IOException {
         /********************************************
          *************** TODO: 条件处理 *************
          *******************************************/
         expression();
         if (Err > 0) {
             return;
-        }
-        if (sym == symbol.neq || sym == symbol.eql || sym == symbol.lss || sym == symbol.leq || sym == symbol.gtr || sym == symbol.geq) {
-            getSym();
-            resultList.add(tempStr);
-            expression();
-        } else {
-            //条件符号不合法
-            error(70);
         }
     }
 
