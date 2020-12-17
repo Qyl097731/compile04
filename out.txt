@@ -1,20 +1,23 @@
 Êä³öÎÄ¼þ:
-public class helloworld {{
+public class helloworld {
 	public static int Add(int a, int b){
-		System.out.println("Enter Function helloworld::Add("a="+a+",b="+b"+")!");
-	    int ret ;
-	    ret = a+b;
-		if(a > b) then {
-		    while(a > b) do {
-                a = a+b;
-            }
+		System.out.println("Enter Function helloworld::Add(a="+a+",b="+b+")!");
+		int ret;
+        ret = a+b;
+		if(a < b){
+		    while(a < b){
+		        a = a+b;
+		    }
+		}else{
+		  ret =a+b;
 		}
-		System.out.println("Exit Function helloworld::Add("a="+a+",b="+b"+")!");
-	   return ret;
+		System.out.println("Exit Function helloworld::Add(a="+a+",b="+b+")!");
+		return ret;
+
 	}
 	public static void main(String[] args) {
 		System.out.println("Enter Function helloworld::main(args="+args.toString()+")!");
-		System.out.println("result="+Add(1,2));
+		System.out.println("result="+Add(1,10));
 		System.out.println("Exit Function helloworld::main(args="+args.toString()+")!");
 	}
 }

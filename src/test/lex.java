@@ -399,12 +399,12 @@ public class lex {
             getSym();
         } else {
             if (sym == symbol.returnsym) {
-                resultStr.append("\n\t\tSystem.out.println(\"Exit Function " + className + "::" + methodInfo.methodName + "(\"");
+                resultStr.append("\n\t\tSystem.out.println(\"Exit Function " + className + "::" + methodInfo.methodName + "(");
                 for (int i = 0; i < methodInfo.params.size(); i++) {
                     resultStr.append(methodInfo.params.get(i) + "=\"+" + methodInfo.params.get(i) +
-                            (i + 1 == methodInfo.params.size() ? "\"" : "+\","));
+                            (i + 1 == methodInfo.params.size() ? "+\"" : "+\","));
                 }
-                resultStr.append("+\")!\");");
+                resultStr.append(")!\");");
             }
             //把单词加到符号表中去
             AddaWordtoList(sym);
@@ -419,9 +419,6 @@ public class lex {
     //TIPS：往前看一个sym
     void block() throws IOException {
         ClassDefinition();
-        if (Err > 0) {
-            return;
-        }
     }
 
     void ClassDefinition() throws IOException {
@@ -436,7 +433,6 @@ public class lex {
                 return;
             }
             if (sym == symbol.lbraces) {
-                resultStr.append(new String(token).trim());
                 getSym();
                 while (iCurPos < line.length()) {
                     statement();
@@ -448,7 +444,7 @@ public class lex {
                     Err++;
                     System.out.println("class缺少}");
                 } else {
-                    resultStr.append((tempStr));
+                    resultStr.append(tempStr);
                 }
             }
 
@@ -512,12 +508,12 @@ public class lex {
                 if (Err > 0) {
                     return;
                 }
-                resultStr.append("\n\t\tSystem.out.println(\"Enter Function " + className + "::" + methodInfo.methodName + "(\"");
+                resultStr.append("\n\t\tSystem.out.println(\"Enter Function " + className + "::" + methodInfo.methodName + "(");
                 for (int i = 0; i < methodInfo.params.size(); i++) {
                     resultStr.append(methodInfo.params.get(i) + "=\"+" + methodInfo.params.get(i) +
-                            (i + 1 == methodInfo.params.size() ? "\"" : "+\","));
+                            (i + 1 == methodInfo.params.size() ? "+\"" : "+\","));
                 }
-                resultStr.append("+\")!\");");
+                resultStr.append(")!\");");
                 if (sym == symbol.lbraces) {
                     getSym();
                     if (sym == symbol.rbraces) {
@@ -631,15 +627,17 @@ public class lex {
         } else if (sym == symbol.returnsym) {
             if (methodInfo.returnType.equals("void")) {
                 Err++;
-                System.out.println("返回类型不匹配");
+                System.out.println(methodInfo.methodName + "方法返回类型不匹配");
             } else {
                 getSym();
                 returnStatement();
             }
         } else {
-            if (!flag)
+            if (!flag) {
                 //语法错误
+                Err++;
                 System.out.println("语法错误");
+            }
         }
     }
 
@@ -700,22 +698,36 @@ public class lex {
             }
             if (sym == symbol.rparen) {
                 getSym();
-                if (sym == symbol.thensym) {
+                if (sym == symbol.lbraces) {
                     getSym();
-                    if (sym == symbol.lbraces) {
+                    statement();
+                    if (Err > 0) {
+                        return;
+                    }
+                    if (sym == symbol.rbraces) {
+                        resultStr.append(tempStr);
                         getSym();
-                        statement();
-                        if (Err > 0) {
-                            return;
+                        if (sym == symbol.elsesym) {
+                            getSym();
+                            if (sym == symbol.lbraces) {
+                                getSym();
+                                statement();
+                                if (Err > 0) {
+                                    return;
+                                }
+                                if (sym == symbol.rbraces) {
+                                    resultStr.append(tempStr);
+                                    getSym();
+                                } else {
+                                    Err++;
+                                    System.out.println("if语句缺少}");
+                                }
+                            }
                         }
-                    } else {
-                        Err++;
-                        System.out.println("then缺少{");
                     }
                 } else {
-                    // 缺少 then 错误
                     Err++;
-                    error(33);
+                    System.out.println("if缺少{");
                 }
             } else {
                 Err++;
@@ -725,7 +737,6 @@ public class lex {
             Err++;
             System.out.println("条件语句缺少(");
         }
-
     }
 
 
@@ -743,25 +754,28 @@ public class lex {
             }
             if (sym == symbol.rparen) {
                 getSym();
-                if (sym == symbol.dosym) {
+                if (sym == symbol.lbraces) {
                     getSym();
-                    if (sym == symbol.lbraces) {
+                    statement();
+                    if(Err > 0){
+                        return;
+                    }
+                    if(sym == symbol.rbraces){
+                        resultStr.append(tempStr);
                         getSym();
-                        statement();
-                    } else {
+                    }else{
                         Err++;
-                        System.out.println("while do缺少{");
+                        System.out.println("while 缺少}");
                     }
                 } else {
-                    //缺少 do
                     Err++;
-                    error(32);
+                    System.out.println("while 缺少{");
                 }
             } else {
                 Err++;
                 System.out.println("while 条件语句缺少）");
             }
-        }else{
+        } else {
             Err++;
             System.out.println("while 条件语句缺少（");
         }
